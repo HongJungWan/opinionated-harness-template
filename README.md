@@ -6,7 +6,6 @@ AI 에이전트가 생성하는 Java/Spring 코드에 DDD 아키텍처 규칙을
 
 <br>
 
----
 
 ## 1. 해결하려는 문제
 
@@ -18,7 +17,6 @@ AI 코드 생성 시 발생하는 아키텍처 부패(도메인의 인프라 직
 
 <br>
 
----
 
 ## 2. 검사 규칙 및 정책
 
@@ -46,7 +44,6 @@ AI 코드 생성 시 발생하는 아키텍처 부패(도메인의 인프라 직
 
 <br>
 
----
 
 ## 3. 퀵 스타트
 
@@ -71,7 +68,6 @@ cp -r .claude <your-project>/ && cp CLAUDE.md <your-project>/
 
 <br>
 
----
 
 ## 4. 프로젝트 구조
 
@@ -90,7 +86,6 @@ cp -r .claude <your-project>/ && cp CLAUDE.md <your-project>/
 
 <br>
 
----
 
 ## 5. 동작 원리
 
@@ -110,7 +105,6 @@ cp -r .claude <your-project>/ && cp CLAUDE.md <your-project>/
 
 <br>
 
----
 
 ## 6. 제약 사항
 
@@ -121,6 +115,5 @@ cp -r .claude <your-project>/ && cp CLAUDE.md <your-project>/
 
 <br>
 
----
 
 **요구사항** — Node.js(훅 실행) · JDK 21+(ArchUnit 모듈)
