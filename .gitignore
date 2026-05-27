@@ -9,3 +9,6 @@ node_modules/
 
 # 주의: .claude/ 는 커밋한다(하네스 본체). .claude/settings.local.json 만 개인 로컬용.
 .claude/settings.local.json
+
+# 작업 노트(PRD/브레인스토밍) — 저장소 추적 제외, 로컬 보존
+plan-document
