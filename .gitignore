@@ -1,0 +1,11 @@
+.DS_Store
+.idea/
+node_modules/
+
+# Gradle (archunit 모듈) — wrapper 는 커밋, 산출물은 무시
+**/build/
+**/.gradle/
+!**/gradle/wrapper/gradle-wrapper.jar
+
+# 주의: .claude/ 는 커밋한다(하네스 본체). .claude/settings.local.json 만 개인 로컬용.
+.claude/settings.local.json
