@@ -1,59 +1,76 @@
-# opinionated-harness-template (Java/Spring)
+# opinionated-harness-template
 
-DDD 원칙을 강제하는 AI 에이전트 하네스 엔지니어링 템플릿.
-`CLAUDE.md` + `.claude/` 를 그대로 복사하면 어떤 Java/Spring 프로젝트든 즉시 하네스가 깔린다.
+AI 에이전트가 짜는 Java/Spring 코드를 DDD 규칙에 맞게 잡아주는 가드레일 템플릿이에요.
 
-**핵심:** DDD 22원칙을 **2중 방어**로 강제한다 — ① **훅**(로컬, 즉시): 에이전트가 Edit/Write 하면
-`exit 2 + stderr` 로 되먹여 그 자리에서 고치게 함. ② **ArchUnit**(CI, 정밀): cross-file 구조 규칙을
-오탐 없이 차단하는 권위 게이트. (전체 커버리지 매트릭스: [`docs/HARNESS.md`](docs/HARNESS.md))
+변경 사항은 아래 릴리스 노트에서 확인할 수 있어요.
 
-대상: Java 21 · Spring Boot 3.5.x · Gradle(`./gradlew`) · Flyway. 기본 정책 = **실용 레이어드**
-(도메인 엔티티의 JPA·Lombok 허용, 도메인→infra/adapter/application 의존·필드 주입 금지).
+<br>
+<br>
 
-## 훅이 강제하는 것
+## 릴리스 노트
 
-| 시점 | 훅 | 규칙 |
-|---|---|---|
-| 파일 수정 직전 | `protect` | Flyway 마이그레이션(`V#__*.sql`) 수정/삭제 차단 |
-| Bash 실행 직전 | `bash` | `mvn`/전역 `gradle` 차단 → `./gradlew` 강제 |
-| **파일 수정 직후** | **`guard`** | 🔒차단: import 순수성·필드주입·캡슐화·DIP·VO/이벤트 불변. ⚠️경고: 애그리거트 경계·ID참조·빈약모델·최소애그리거트·도메인서비스·팩토리(휴리스틱, import-follow) |
-| 완료 선언 직전 | `checklist` | 요구사항 대조·실행 검증·DDD 점검 1회 강제 |
+<br>
 
-마커(`ddd-markers/`: `@AggregateRoot`/`@AggregateInternal`/`@ValueObject`/`@DomainEvent`/`@DomainService`)를
-도메인에 표시하면 훅·ArchUnit 둘 다 인식한다.
+### v0.1.0
 
-## 구성 (5대 레버)
+`2026년 5월 27일` · 첫 공개 릴리스
 
-```
-CLAUDE.md                       # 시스템 프롬프트(카파시 4원칙 + 스택 + 규칙 + 명령, ≤60줄)
-.claude/
-  settings.json                 # 훅 배선(커밋, 팀 공유)
-  hooks/harness.mjs             # 단일 디스패처 guard|protect|bash|checklist (Node, 의존성 0)
-  hooks/harness.config.json     # 프로젝트별로 이것만 수정 (layers/forbiddenImports/...)
-  skills/                       # ddd-guidelines · db-migration(Flyway) · api-generator(REST) · jpa-persistence
-  agents/ddd-reviewer.md        # 컨텍스트 방화벽 서브에이전트
-ddd-markers/                    # DDD 마커 어노테이션(훅·ArchUnit 공용, 복사용)
-archunit/                       # ArchUnit CI 게이트 드롭인(자립 Gradle 모듈) — docs/ARCHUNIT.md
-.github/workflows/ddd-archunit.yml  # 훅 자가검증 + ArchUnit 게이트 CI
-── 템플릿 개발/검증용 (복사 대상 아님) ──
-fixtures/{clean,bad}/           # 훅 자가검증 샘플(Java)
-scripts/verify-harness.sh       # 훅 차단/통과 e2e 단언 (현재 16/16 통과)
-docs/HARNESS.md · docs/ARCHUNIT.md  # 가이드(커버리지 매트릭스 / ArchUnit 드롭인)
-```
+로컬 훅과 CI(ArchUnit) 두 곳에서 DDD 위반을 잡는 첫 버전을 공개했어요. `.claude/` 와 `CLAUDE.md` 를
+프로젝트에 복사하고 설정 몇 줄만 고치면 바로 쓸 수 있어요.
 
-## 빠른 시작
+<br>
 
-```bash
-# 1) 도입: 복사 단위 = CLAUDE.md + .claude/
-cp -r .claude <your-project>/ && cp CLAUDE.md <your-project>/
+**`새 기능`  로컬 훅 가드레일**
 
-# 2) .claude/hooks/harness.config.json 에서 layers/forbiddenImports/protectedPaths 만 조정
+에이전트가 파일을 고치면 그 즉시 훅이 코드를 읽고 DDD 위반을 짚어줘요. 위반이면 에이전트에게 메시지를
+돌려주고, 에이전트는 같은 흐름에서 스스로 고쳐요. 사람이 매번 리뷰로 잡지 않아도 돼요.
 
-# 3) 검증(이 저장소에서): 훅이 실제로 차단/통과하는지
-./scripts/verify-harness.sh
-```
+- 도메인이 인프라·외부 레이어를 참조하거나, 필드 주입(`@Autowired`)·`@Setter`/`@Data`로 캡슐화를 깨거나, 값 객체를 가변으로 두면 바로 짚어줘요.
+- 애그리거트 경계 침범, 다른 애그리거트 직접 참조, 빈약한 모델 같은 건 경고로 알려줘요. 정규식 휴리스틱이라 오탐을 고려해 기본은 막지 않아요.
+- 마이그레이션 파일(`V#__*.sql`) 수정과 전역 `mvn`/`gradle` 실행은 실행 전에 막아요(Wrapper 사용 강제).
+- 작업을 끝내기 직전엔 자가 점검 체크리스트를 한 번 띄워줘요.
 
-자세한 도입/커스터마이즈는 [`docs/HARNESS.md`](docs/HARNESS.md), DDD 원칙은
-[`.claude/skills/ddd-guidelines/SKILL.md`](.claude/skills/ddd-guidelines/SKILL.md).
+<br>
 
-요구사항: `node` (훅 실행). npm 의존성 없음. CI 권위 게이트는 ArchUnit 으로 보완 권장.
+**`새 기능`  ArchUnit CI 게이트**
+
+CI에서 컴파일된 클래스 그래프 전체를 보고 구조 위반을 막아요. 레이어 의존성, DIP, 애그리거트 접근,
+ID 참조, 값 객체 불변성을 검사해요. 여러 클래스에 걸친 구조 문제나 훅을 거치지 않은 변경은 여기서 걸려요.
+
+규칙이 진짜로 위반을 잡는지까지 `DddRulesNegativeTest`로 역검증해 둬서, 게이트 자체를 믿고 쓸 수 있어요.
+
+<br>
+
+**`새 기능`  공용 마커 어노테이션**
+
+`@AggregateRoot` · `@AggregateInternal` · `@ValueObject` · `@DomainEvent` · `@DomainService` 를 제공해요.
+도메인 모델에 이 마커를 붙이면 훅과 ArchUnit이 같은 기준으로 애그리거트·값 객체·이벤트 규칙을 검사해요.
+
+<br>
+
+**`새 기능`  스킬과 리뷰 서브에이전트**
+
+에이전트가 필요할 때 불러 쓰는 스킬 4종(`ddd-guidelines` · `db-migration` · `api-generator` ·
+`jpa-persistence`)을 넣었어요. 자동 검사로 판정하기 어려운 영역은 `ddd-reviewer` 서브에이전트가 리뷰로 맡아요.
+
+<br>
+
+**`정책`  실용적 레이어드**
+
+도메인 엔티티의 JPA(`@Entity`)·`@Getter`·Lombok은 허용하고, 가변을 여는 `@Setter`/`@Data`만 막아요.
+순수 헥사고날로 더 조이고 싶으면 `harness.config.json`의 `forbiddenImports.domain`만 손보면 돼요.
+
+<br>
+
+**`참고`  알아두면 좋은 점**
+
+- 파일 수정 직후 도는 훅(`guard`)은 최초 작성 자체를 막지는 못해요. 위반을 돌려줘 다음 턴에 고치게 해요. 사람이 IDE로 직접 쓴 코드엔 훅이 안 도니, CI의 ArchUnit이 받쳐줘요.
+- 경고 규칙은 정규식 기반이라 오탐·누락이 있을 수 있어요. 그래서 기본을 경고로 뒀어요.
+- DDD 원칙 중 맥락 해석이 필요한 약 10개는 자동 검사 대신 리뷰 서브에이전트에 맡겨요. 무리하게 흉내내지 않았어요.
+- ArchUnit은 대상 프로젝트의 빌드에 연결해야 게이트로 동작해요.
+
+<br>
+<br>
+
+요구사항은 훅 실행에 Node.js, ArchUnit 모듈에 JDK 21 이상이에요.
+쓰는 법은 [`docs/HARNESS.md`](docs/HARNESS.md), ArchUnit 연결은 [`docs/ARCHUNIT.md`](docs/ARCHUNIT.md)에 정리해 뒀어요.
