@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# 하네스 훅 자가 검증. 훅 입력(JSON)을 모사해 차단/통과 종료코드를 단언한다.
+# "에이전트가 작성한 코드에 훅이 잘 도는지"를 결정론적으로 증명한다.
+set -u
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+H="$ROOT/.claude/hooks/harness.mjs"
+pass=0; fail=0
+
+# $1 기대 종료코드, $2 설명, $3 하위명령, $4 stdin JSON
+expect() {
+  local want="$1" desc="$2" sub="$3" json="$4"
+  printf '%s' "$json" | node "$H" "$sub" >/dev/null 2>&1
+  local got=$?
+  if [ "$got" -eq "$want" ]; then echo "  ✔ $desc (exit $got)"; pass=$((pass+1));
+  else echo "  ✗ $desc — 기대 $want, 실제 $got"; fail=$((fail+1)); fi
+}
+
+# 경고(warn) 단언: exit 0 + stderr 에 keyword 포함. $1 keyword, $2 설명, $3 파일
+expect_warn() {
+  local kw="$1" desc="$2" file="$3"
+  local err; err="$(mk "$file" | node "$H" guard 2>&1 >/dev/null)"; local got=$?
+  if [ "$got" -eq 0 ] && printf '%s' "$err" | grep -q "$kw"; then
+    echo "  ✔ $desc (warn, exit 0 + 메시지)"; pass=$((pass+1));
+  else echo "  ✗ $desc — exit $got / 메시지 누락($kw)"; fail=$((fail+1)); fi
+}
+
+DOM="$ROOT/fixtures/bad/src/main/java/com/example/domain"
+BAD="$DOM/order/OrderService.java"
+CART="$DOM/order/Cart.java"
+IMPL="$DOM/order/OrderRepositoryImpl.java"
+MONEY="$DOM/order/Money.java"
+REPO="$DOM/order/OrderRepository.java"
+CHECKOUT="$DOM/checkout/Checkout.java"
+SUBS="$DOM/subscription/Subscription.java"
+CLEAN="$ROOT/fixtures/clean/src/main/java/com/example/domain/order/Order.java"
+mk() { echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$1\"}}"; }
+
+echo "▶ guard — 차단(block)"
+expect 2 "도메인 infra import + 필드주입 → 차단" guard "$(mk "$BAD")"
+expect 2 "도메인 @Setter/public setter → 차단"   guard "$(mk "$CART")"
+expect 2 "도메인 *RepositoryImpl(DIP) → 차단"    guard "$(mk "$IMPL")"
+expect 2 "@ValueObject 가변(불변성) → 차단"       guard "$(mk "$MONEY")"
+expect 2 "도메인 *Repository 클래스(DIP) → 차단"  guard "$(mk "$REPO")"
+expect 0 "리치 도메인 엔티티 → 통과(경고 없음)"   guard "$(mk "$CLEAN")"
+
+echo "▶ guard — 경고(warn, 비차단)"
+expect_warn "애그리거트 경계" "다른 애그리거트 @AggregateInternal 참조 → 경고" "$CHECKOUT"
+expect_warn "ID 참조"        "다른 AR 객체 직접 참조 → 경고"                 "$SUBS"
+
+echo "▶ protect (PreToolUse)"
+expect 2 "Flyway 마이그레이션 수정 → 차단" protect \
+  '{"tool_input":{"file_path":"/x/src/main/resources/db/migration/V1__init.sql"}}'
+expect 0 "일반 파일 → 통과"            protect '{"tool_input":{"file_path":"/x/src/main/java/com/example/domain/Order.java"}}'
+
+echo "▶ bash (PreToolUse Bash)"
+expect 2 "mvn 사용 → 차단"       bash '{"tool_input":{"command":"mvn install"}}'
+expect 2 "전역 gradle 사용 → 차단" bash '{"tool_input":{"command":"gradle build"}}'
+expect 0 "./gradlew 사용 → 통과"   bash '{"tool_input":{"command":"./gradlew build"}}'
+
+echo "▶ checklist (Stop)"
+expect 2 "완료 직전 → 자가점검 강제" checklist '{}'
+expect 0 "이미 점검 중 → 통과(루프 방지)" checklist '{"stop_hook_active":true}'
+
+echo "▶ config 유효성"
+if node -e "JSON.parse(require('fs').readFileSync('$ROOT/.claude/hooks/harness.config.json','utf8'))" 2>/dev/null; then
+  echo "  ✔ harness.config.json 파싱 OK"; pass=$((pass+1)); else echo "  ✗ config 파싱 실패"; fail=$((fail+1)); fi
+
+echo
+echo "결과: $pass 통과 / $fail 실패"
+[ "$fail" -eq 0 ] && echo "✅ 하네스 훅 검증 완료" || { echo "❌ 실패 있음"; exit 1; }
