@@ -1,119 +1,76 @@
-# opinionated-harness-template (Java/Spring)
+# opinionated-harness-template
 
-AI 에이전트가 생성하는 Java/Spring 코드에 DDD 아키텍처 규칙을 강제하는 가드레일 템플릿.
+AI 에이전트가 짜는 Java/Spring 코드를 DDD 규칙에 맞게 잡아주는 가드레일 템플릿이에요.
 
-**로컬 파일 훅** + **CI 단계 ArchUnit** 을 공용 마커 어노테이션으로 연동해 아키텍처 오염 자동 차단.
+변경 사항은 아래 릴리스 노트에서 확인할 수 있어요.
+
+<br>
+<br>
+
+## 릴리스 노트
 
 <br>
 
+### v0.1.0
 
-## 1. 해결하려는 문제
+`2026년 5월 27일` · 첫 공개 릴리스
 
-AI 코드 생성 시 발생하는 아키텍처 부패(도메인의 인프라 직접 참조, 캡슐화 파괴, DIP 위반)를 **코드 리뷰 전** 차단.
-
-- **실시간 피드백 루프** — AI 코드 작성 즉시 훅이 위반 감지·에러 반환 → 컨텍스트 유지한 채 자가 수정, 사람 리뷰 공수 절감
-- **우회·우발 파괴 차단** — 컴파일된 클래스 의존성 그래프 전체 검사(ArchUnit)로 훅 우회·다중 클래스 구조 꼬임까지 포착
-- **낮은 오탐률** — 정적 분석으로 확실히 판정 가능한 규칙만 검사. 맥락 해석이 필요한 영역은 리뷰 전용 서브에이전트에 위임
+로컬 훅과 CI(ArchUnit) 두 곳에서 DDD 위반을 잡는 첫 버전을 공개했어요. `.claude/` 와 `CLAUDE.md` 를
+프로젝트에 복사하고 설정 몇 줄만 고치면 바로 쓸 수 있어요.
 
 <br>
 
+**`새 기능`  로컬 훅 가드레일**
 
-## 2. 검사 규칙 및 정책
+에이전트가 파일을 고치면 그 즉시 훅이 코드를 읽고 DDD 위반을 짚어줘요. 위반이면 에이전트에게 메시지를
+돌려주고, 에이전트는 같은 흐름에서 스스로 고쳐요. 사람이 매번 리뷰로 잡지 않아도 돼요.
 
-로컬 훅 2단계 동작.
-
-- **차단(Block)** — `exit 2`, 작업 중단 + 피드백 반환
-- **경고(Warn)** — 메시지만 남기고 통과(`exit 0`). 정규식 휴리스틱이라 오탐 고려해 기본 비차단
-
-<br>
-
-| 분류 | 대상 규칙 |
-| :--- | :--- |
-| 🔒 **훅 차단** | 도메인→외부 레이어 참조 · 필드 주입(`@Autowired`) · 캡슐화 파괴(`@Setter`/`@Data`) · DIP 위반 · VO/이벤트 가변 |
-| ⚠️ **훅 경고** | 애그리거트 경계 외부 참조 · AR 객체 직접 참조 · 빈약한 도메인 모델 · 도메인 서비스 상태 보유 · 정적 팩토리 부재 · 이벤트 비-과거형 명명 |
-| 🚧 **사전 차단** | 마이그레이션 파일(`V#__*.sql`) 수정/삭제 · 전역 `mvn`/`gradle`(Wrapper 강제) |
-| ✅ **ArchUnit** | 레이어드 의존성 · DIP · 애그리거트 접근 · ID 참조 · VO 불변 (전체 클래스 그래프) |
-| 📝 **리뷰 위임** | 바운디드 컨텍스트 분리 · 서브도메인 분류 · 컨텍스트 맵/ACL · 응용 로직 침투 · 단일 트랜잭션-단일 AR · 보편 언어 · Tell, Don't Ask |
+- 도메인이 인프라·외부 레이어를 참조하거나, 필드 주입(`@Autowired`)·`@Setter`/`@Data`로 캡슐화를 깨거나, 값 객체를 가변으로 두면 바로 짚어줘요.
+- 애그리거트 경계 침범, 다른 애그리거트 직접 참조, 빈약한 모델 같은 건 경고로 알려줘요. 정규식 휴리스틱이라 오탐을 고려해 기본은 막지 않아요.
+- 마이그레이션 파일(`V#__*.sql`) 수정과 전역 `mvn`/`gradle` 실행은 실행 전에 막아요(Wrapper 사용 강제).
+- 작업을 끝내기 직전엔 자가 점검 체크리스트를 한 번 띄워줘요.
 
 <br>
 
-> 💡 **설계 방침 — 실용적 레이어드**
->
-> 도메인 엔티티의 JPA(`@Entity`)·`@Getter`·Lombok 허용, 가변 노출(`@Setter`/`@Data`)만 차단.
-> 순수 헥사고날 격리 → `harness.config.json` 의 `forbiddenImports.domain` 조정.
+**`새 기능`  ArchUnit CI 게이트**
+
+CI에서 컴파일된 클래스 그래프 전체를 보고 구조 위반을 막아요. 레이어 의존성, DIP, 애그리거트 접근,
+ID 참조, 값 객체 불변성을 검사해요. 여러 클래스에 걸친 구조 문제나 훅을 거치지 않은 변경은 여기서 걸려요.
+
+규칙이 진짜로 위반을 잡는지까지 `DddRulesNegativeTest`로 역검증해 둬서, 게이트 자체를 믿고 쓸 수 있어요.
 
 <br>
 
+**`새 기능`  공용 마커 어노테이션**
 
-## 3. 퀵 스타트
-
-**① 적용** — 대상 프로젝트에 핵심 파일 복사
-
-```bash
-cp -r .claude <your-project>/ && cp CLAUDE.md <your-project>/
-```
-
-**② 설정** — `.claude/hooks/harness.config.json` 수정
-
-- `layers` — 패키지 구조 글롭 (예: `**/domain/**`)
-- `forbiddenImports.domain` — 도메인에서 참조 금지할 패키지/타입
-- `protectedPaths` — 보호할 마이그레이션 경로
-
-> ⚠️ 애그리거트·VO·이벤트 규칙 활성화 → 도메인 클래스에 `@AggregateRoot` 등 마커 부착 필수
-
-**③ 검증·통합**
-
-- 훅 자체 검증 — `./scripts/verify-harness.sh`
-- ArchUnit 통합 — 독립 Gradle 모듈 `archunit/` 을 대상 CI 에 연결 → [`docs/ARCHUNIT.md`](docs/ARCHUNIT.md)
+`@AggregateRoot` · `@AggregateInternal` · `@ValueObject` · `@DomainEvent` · `@DomainService` 를 제공해요.
+도메인 모델에 이 마커를 붙이면 훅과 ArchUnit이 같은 기준으로 애그리거트·값 객체·이벤트 규칙을 검사해요.
 
 <br>
 
+**`새 기능`  스킬과 리뷰 서브에이전트**
 
-## 4. 프로젝트 구조
-
-```
-├── CLAUDE.md                    # 에이전트 시스템 프롬프트
-├── .claude/                     # [대상 프로젝트 복사 대상]
-│   ├── settings.json            # 이벤트별 훅 매핑
-│   ├── hooks/
-│   │   ├── harness.mjs          # 훅 디스패처 (Node.js, 의존성 0)
-│   │   └── harness.config.json  # 프로젝트별 룰셋 데이터
-│   ├── skills/                  # 도메인 가이드·코드 생성 스킬
-│   └── agents/ddd-reviewer.md   # 정적 분석 불가 영역 심사 서브에이전트
-├── ddd-markers/                 # 훅·ArchUnit 공용 마커 어노테이션
-└── archunit/                    # CI 검증용 ArchUnit 룰 + Good/Bad 샘플 모듈
-```
+에이전트가 필요할 때 불러 쓰는 스킬 4종(`ddd-guidelines` · `db-migration` · `api-generator` ·
+`jpa-persistence`)을 넣었어요. 자동 검사로 판정하기 어려운 영역은 `ddd-reviewer` 서브에이전트가 리뷰로 맡아요.
 
 <br>
 
+**`정책`  실용적 레이어드**
 
-## 5. 동작 원리
-
-### 로컬 훅 (Claude Code)
-
-에이전트 도구 호출 이벤트 가로채 검증.
-
-- **PreToolUse** (`protect`/`bash`) — 수정 전 보호 경로 검증 · `mvn`/전역 `gradle` 사전 차단
-- **PostToolUse** (`guard`) — 디스크 작성 직후 검증, 위반 시 `exit 2` → 다음 턴 자가 수정 강제 (import 타입 소스까지 추적해 마커 확인)
-- **Stop** (`checklist`) — 완료 직전 최종 자가 점검 요구
-
-### CI 검증 (ArchUnit)
-
-- `@AnalyzeClasses` — 컴파일된 바이트코드 읽어 규칙 평가
-- 애그리거트 참조 오염 등 정규식 난점 — 커스텀 룰 검증
-- `DddRulesNegativeTest` — 위반 샘플로 규칙 자체 역검증
+도메인 엔티티의 JPA(`@Entity`)·`@Getter`·Lombok은 허용하고, 가변을 여는 `@Setter`/`@Data`만 막아요.
+순수 헥사고날로 더 조이고 싶으면 `harness.config.json`의 `forbiddenImports.domain`만 손보면 돼요.
 
 <br>
 
+**`참고`  알아두면 좋은 점**
 
-## 6. 제약 사항
-
-- **시점 한계** — `guard` 는 작성 후(PostToolUse) 동작 → 최초 작성 물리 차단 불가, 다음 턴 유도. 사람 IDE 직접 수정엔 미작동 → CI ArchUnit 필수
-- **정규식 기반** — 경고 규칙은 AST 아닌 휴리스틱 → 오탐·누락 가능
-- **분석 범위** — import 추적은 소스 파일 기준, 생성 코드·외부 jar·타 모듈 타입 미추적
-- **명령어 오탐** — `bash` 가드 문자열 매칭, `echo "gradle"` 같은 텍스트도 차단
+- 파일 수정 직후 도는 훅(`guard`)은 최초 작성 자체를 막지는 못해요. 위반을 돌려줘 다음 턴에 고치게 해요. 사람이 IDE로 직접 쓴 코드엔 훅이 안 도니, CI의 ArchUnit이 받쳐줘요.
+- 경고 규칙은 정규식 기반이라 오탐·누락이 있을 수 있어요. 그래서 기본을 경고로 뒀어요.
+- DDD 원칙 중 맥락 해석이 필요한 약 10개는 자동 검사 대신 리뷰 서브에이전트에 맡겨요. 무리하게 흉내내지 않았어요.
+- ArchUnit은 대상 프로젝트의 빌드에 연결해야 게이트로 동작해요.
 
 <br>
+<br>
 
-
-**요구사항** — Node.js(훅 실행) · JDK 21+(ArchUnit 모듈)
+요구사항은 훅 실행에 Node.js, ArchUnit 모듈에 JDK 21 이상이에요.
+쓰는 법은 [`docs/HARNESS.md`](docs/HARNESS.md), ArchUnit 연결은 [`docs/ARCHUNIT.md`](docs/ARCHUNIT.md)에 정리해 뒀어요.
