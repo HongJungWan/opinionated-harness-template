@@ -14,13 +14,13 @@
   "checks": {
     "vodImmutability": "block",
     "repositoryInterface": "block",
-    "aggregateBoundary": "warn",
-    "idReference": "warn",
-    "anemicModel": "warn",
-    "minAggregate": "warn",
-    "domainServiceStateless": "warn",
-    "domainFactory": "warn",
-    "pastTenseEvent": "warn"
+    "aggregateBoundary": "block",
+    "idReference": "block",
+    "anemicModel": "block",
+    "minAggregate": "block",
+    "domainServiceStateless": "block",
+    "domainFactory": "block",
+    "pastTenseEvent": "block"
   },
   "layers": {
     "presentation": ["**/controller/**", "**/controllers/**", "**/web/**", "**/presentation/**"],
