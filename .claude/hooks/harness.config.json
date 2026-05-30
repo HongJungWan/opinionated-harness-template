@@ -1,6 +1,5 @@
 {
   "_doc": "프로젝트별로 이 파일만 고치면 된다. layers/forbiddenImports/forbiddenContentPatterns/protectedPaths/forbiddenCommands. (Java/Spring 기본값, 실용 레이어드)",
-  "stack": { "buildTool": "gradle", "wrapper": "./gradlew" },
   "commandRule": "Gradle wrapper(./gradlew)만 사용하세요. mvn / 전역 gradle 금지.",
   "importPatterns": ["import\\s+(?:static\\s+)?([\\w.]+)\\s*;"],
   "sourceExtensions": [".java", ".kt"],
