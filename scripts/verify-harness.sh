@@ -15,12 +15,13 @@ expect() {
   else echo "  ✗ $desc — 기대 $want, 실제 $got"; fail=$((fail+1)); fi
 }
 
-# 경고(warn) 단언: exit 0 + stderr 에 keyword 포함. $1 keyword, $2 설명, $3 파일
-expect_warn() {
-  local kw="$1" desc="$2" file="$3"
+# exit 코드 + stderr keyword 단언. $1 want exit, $2 keyword, $3 설명, $4 파일.
+# (severity 가 block/warn 어느 쪽이든 검증할 수 있도록 exit 코드를 인자로 받는다.)
+expect_msg() {
+  local want="$1" kw="$2" desc="$3" file="$4"
   local err; err="$(mk "$file" | node "$H" guard 2>&1 >/dev/null)"; local got=$?
-  if [ "$got" -eq 0 ] && printf '%s' "$err" | grep -q "$kw"; then
-    echo "  ✔ $desc (warn, exit 0 + 메시지)"; pass=$((pass+1));
+  if [ "$got" -eq "$want" ] && printf '%s' "$err" | grep -q "$kw"; then
+    echo "  ✔ $desc (exit $got + 메시지)"; pass=$((pass+1));
   else echo "  ✗ $desc — exit $got / 메시지 누락($kw)"; fail=$((fail+1)); fi
 }
 
@@ -43,9 +44,9 @@ expect 2 "@ValueObject 가변(불변성) → 차단"       guard "$(mk "$MONEY")
 expect 2 "도메인 *Repository 클래스(DIP) → 차단"  guard "$(mk "$REPO")"
 expect 0 "리치 도메인 엔티티 → 통과(경고 없음)"   guard "$(mk "$CLEAN")"
 
-echo "▶ guard — 경고(warn, 비차단)"
-expect_warn "애그리거트 경계" "다른 애그리거트 @AggregateInternal 참조 → 경고" "$CHECKOUT"
-expect_warn "ID 참조"        "다른 AR 객체 직접 참조 → 경고"                 "$SUBS"
+echo "▶ guard — 메시지 + exit 코드 (현 정책: checks.aggregateBoundary/idReference=block)"
+expect_msg 2 "애그리거트 경계" "다른 애그리거트 @AggregateInternal 참조 → 차단" "$CHECKOUT"
+expect_msg 2 "ID 참조"        "다른 AR 객체 직접 참조 → 차단"                  "$SUBS"
 
 echo "▶ protect (PreToolUse)"
 expect 2 "Flyway 마이그레이션 수정 → 차단" protect \

@@ -76,7 +76,7 @@ cp    opinionated-harness-template/CLAUDE.md <your-project>/CLAUDE.md
 
 3. `CLAUDE.md`의 `<...>` 스택/버전 플레이스홀더를 채워요.
 
-끝이에요. 다음 `Edit`/`Write`부터 훅이 자동으로 돌아요. 훅이 진짜로 도는지 확인하려면 `./scripts/verify-harness.sh`를 한 번 돌려봐요. 49개 단언이 통과하면 가드레일이 깔린 거예요.
+끝이에요. 다음 `Edit`/`Write`부터 훅이 자동으로 돌아요. 훅이 진짜로 도는지 확인하려면 `./scripts/verify-harness.sh`를 한 번 돌려봐요. 마지막 줄에 `✅ 하네스 훅 검증 완료`가 뜨면 가드레일이 깔린 거예요.
 
 <br>
 
