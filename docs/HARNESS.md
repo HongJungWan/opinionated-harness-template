@@ -1,70 +1,96 @@
 # 하네스 엔지니어링 가이드 (Java/Spring)
 
-AI 에이전트(Claude Code)를 결정론적으로 제어하는 5대 레버. 핵심은 **훅이 에이전트가 작성한
-Java/Spring 코드를 DDD 원칙에 맞게 강제**하는 것이다. (대상: Java 21 / Spring Boot / Gradle / Flyway)
+AI 에이전트가 짠 Java/Spring 코드를 DDD 원칙에 맞게 잡아주는 가드레일이 어떻게 동작하는지 정리한 문서예요. 대상 스택은 Java 21 · Spring Boot · Gradle(wrapper) · Flyway 예요.
 
-## 5대 레버
+<br>
+
+## 이 가드레일이 하는 일
+
+다섯 개의 레버를 조합해서 에이전트의 동작을 제약해요. 그중 **훅(Hooks)이 가장 큰 레버**예요. 사람이 매번 리뷰로 잡지 않아도, 에이전트가 코드를 쓰는 그 자리에서 DDD 위반을 짚어줘요.
 
 | 레버 | 위치 | 역할 |
 |---|---|---|
-| 시스템 프롬프트 | `CLAUDE.md` (≤60줄) | 세션 시작 시 주입되는 최상위 제약(카파시 4원칙 + 스택 + 규칙 + 명령) |
-| 스킬(점진적 공개) | `.claude/skills/*/SKILL.md` | 도메인 지식을 모듈화해 *필요할 때만* 로드 → 컨텍스트 청결 |
-| 서브에이전트(컨텍스트 방화벽) | `.claude/agents/*.md` | 헤비 태스크를 단기 에이전트에 위임, 결론만 회수 |
-| **훅(결정론적 체크포인트)** | `.claude/hooks/` | **작성 코드를 자동 검증. 가장 큰 성능 레버.** |
+| 시스템 프롬프트 | `CLAUDE.md` (60줄 이하) | 세션 시작 시 주입되는 최상위 제약 — 카파시 4원칙 · 스택 · 규칙 · 명령 |
+| 스킬 (필요할 때만 로드) | `.claude/skills/*/SKILL.md` | 도메인 지식을 모듈로 떼어 둠. 컨텍스트를 깨끗하게 유지하려고 필요한 순간에만 꺼내 봐요 |
+| 서브에이전트 | `.claude/agents/*.md` | 무거운 검토는 단기 에이전트에 맡기고 결론만 받아요. 메인 컨텍스트가 오염되지 않게 막는 방화벽 |
+| **훅 (자동 검증)** | `.claude/hooks/` | **에이전트가 쓴 코드를 읽고 DDD 규칙으로 자동 검사. 가장 큰 성능 레버.** |
+| 마커 어노테이션 | `ddd-markers/` | `@AggregateRoot` · `@AggregateInternal` · `@ValueObject` · `@DomainEvent` · `@DomainService` — 훅(이름 기준)과 ArchUnit(클래스 기준)이 같은 마커를 함께 봐요 |
 
-## 훅 동작
+<br>
 
-| 시점 | 훅 | 동작 |
-|---|---|---|
-| 파일 수정 직전 | `protect` | 보호 경로(Flyway 마이그레이션) 수정/삭제 차단 |
-| Bash 실행 직전 | `bash` | `mvn`/전역 `gradle` 차단 → `./gradlew` 강제 |
-| **파일 수정 직후** | **`guard`** | **완성 파일 + 참조 타입(import-follow)을 읽어 검사. 🔒차단(exit2): 도메인 import 순수성·필드주입·캡슐화(@Setter/@Data/setter)·DIP(*RepositoryImpl, *Repository=interface)·VO/이벤트 불변성. ⚠️경고(exit0): 애그리거트 경계·ID참조·빈약모델·최소애그리거트·도메인서비스 무상태·팩토리·이벤트 과거형** |
-| 완료 선언 직전 | `checklist` | 요구사항 대조 자가 점검 1회 강제 |
+## 훅이 언제 어떻게 도는가
 
-> **마커**: 애그리거트/VO/이벤트에 `ddd-markers/`의 `@AggregateRoot`·`@AggregateInternal`·`@ValueObject`·
-> `@DomainEvent`·`@DomainService` 를 표시하면 훅(이름 기반)과 ArchUnit(클래스 기반)이 함께 인식한다.
+훅은 네 가지 시점에 돌아요. 각 시점이 잡는 위반이 달라요.
 
-위반 시 훅은 `exit 2 + stderr` 로 신호한다. Claude Code 는 그 stderr 를 에이전트에게 보여주고,
-에이전트는 그 자리에서 코드를 고친다. 모든 로직은 `harness.mjs`(Node, 의존성 0) 하나에 있다.
-Node 만 있으면 되고 빌드 도구(Gradle)와 무관하게 작동한다.
+**파일 수정 직전 — `protect`**
 
-> **왜 PostToolUse 인가?** PreToolUse 는 Edit 의 조각(new_string)만 보여 import 전체를 분석할 수 없다.
-> DDD 가드는 수정이 끝난 *완성 파일*을 읽어야 정확하다. (마이그레이션/명령 차단은 입력만으로 판단되어 PreToolUse.)
->
-> **훅 vs CI:** 훅은 로컬 *에이전트 루프*의 빠른 강제다. 사람·CI 까지 포함한 권위 있는 게이트는
-> **ArchUnit**(JVM 아키텍처 테스트)으로 상호보완하는 것을 권장한다.
+Flyway 마이그레이션(`V#__*.sql`)을 고치거나 지우려 하면 실행 전에 막아요. 새 버전을 추가하라는 신호를 돌려줘요.
 
-## 복사-붙여넣기 도입 (3단계)
+**Bash 실행 직전 — `bash`**
+
+전역 `mvn`이나 `gradle` 실행을 막고 `./gradlew`를 쓰라고 알려줘요. 빌드 도구 불일치로 생기는 환경 차이를 막아요.
+
+**파일 수정 직후 — `guard` (가장 자주 도는 훅)**
+
+수정이 끝난 *완성 파일*과 그 파일이 참조하는 타입(import-follow)까지 읽어서 DDD 규칙으로 검사해요. 결과는 두 갈래로 나와요.
+
+- 🔒 **차단(exit 2)** — 그 자리에서 고쳐야 해요.
+    - 도메인이 인프라·외부 레이어를 import
+    - 필드 주입 (`@Autowired` 필드)
+    - 도메인 캡슐화 위반 (`@Setter` · `@Data` · public setter)
+    - DIP 위반 (`*RepositoryImpl`이 도메인에, `*Repository`가 클래스로)
+    - 값 객체 · 이벤트의 가변 노출
+- ⚠️ **경고(exit 0)** — 알려만 주고 막지는 않아요. 정규식 휴리스틱이라 오탐 여지가 있어서 기본은 비차단이에요.
+    - 애그리거트 경계 침범 · ID 참조 · 빈약한 모델 · 최소 애그리거트 · 도메인 서비스 무상태 · 팩토리 · 이벤트 이름 과거형
+
+**완료 선언 직전 — `checklist`**
+
+작업을 끝내겠다고 신호하기 전에 자가 점검 체크리스트를 한 번 띄워요. 요구사항을 빠뜨리지 않았는지 에이전트가 스스로 대조해요.
+
+위반이 잡히면 훅은 `exit 2 + stderr`로 신호하고, Claude Code가 그 메시지를 에이전트에게 보여줘요. 에이전트는 같은 흐름에서 바로 코드를 고쳐요. 모든 로직은 `harness.mjs`(Node, 의존성 0) 한 파일에 있어요. Node만 있으면 Gradle을 안 쓰는 환경에서도 돌아요.
+
+<br>
+
+## 왜 파일 수정 직후(PostToolUse)에 잡는가
+
+`Edit` 도구는 수정 조각(`new_string`)만 훅에 넘겨요. 그 조각만 봐서는 파일 전체 import를 알 수 없어 도메인 순수성 같은 규칙을 정확히 검사할 수 없어요. 그래서 DDD 가드는 수정이 끝난 *완성 파일*을 직접 읽는 PostToolUse로 둬요. 반대로 마이그레이션 보호나 명령 차단은 입력만 봐도 판단되므로 PreToolUse면 충분해요.
+
+훅과 ArchUnit은 역할이 달라요. 훅은 로컬 에이전트 루프에서 빠르게 도는 1차 강제예요(휴리스틱이라 경고는 오탐 허용). 사람과 CI까지 포함한 권위 있는 최종 게이트는 ArchUnit이 받쳐줘요. 둘의 분담은 [`ARCHUNIT.md`](ARCHUNIT.md)에 정리해 뒀어요.
+
+<br>
+
+## 세 단계로 가져다 쓰기
 
 ```bash
 # 1. 대상 프로젝트 루트에 두 가지를 복사
 cp -r opinionated-harness-template/.claude  <your-project>/.claude
 cp    opinionated-harness-template/CLAUDE.md <your-project>/CLAUDE.md
 ```
-2. `.claude/hooks/harness.config.json` 에서 **이것만** 수정:
-   - `layers` / `forbiddenImports` — 프로젝트 패키지 구조에 맞게(예: `**/domain/**`). 순서 주의: `presentation`(컨트롤러)을 `domain` 앞에 둬 도메인 판정에서 제외.
-   - `forbiddenContentPatterns` — 필드 주입 등 콘텐츠 정규식 규칙.
-   - `protectedPaths` — Flyway/Liquibase 마이그레이션 경로.
-   - `forbiddenCommands` / `commandRule` / `stack` — 빌드 도구(Gradle/Maven).
-   - `importPatterns` — 다른 JVM 언어(Kotlin 등) 추가 시.
-3. `CLAUDE.md` 의 `<...>` 스택/버전 플레이스홀더 채움.
 
-끝. 다음 Edit/Write 부터 훅이 자동으로 돈다. (검증: `./scripts/verify-harness.sh`)
+2. `.claude/hooks/harness.config.json`에서 **이 다섯 가지만** 손봐요.
+    - `layers` · `forbiddenImports` — 프로젝트 패키지 구조에 맞춰요. 순서 주의: `presentation`(컨트롤러)을 `domain` 앞에 둬서 도메인 판정에서 빠지게 해요.
+    - `forbiddenContentPatterns` — 필드 주입 같은 콘텐츠 정규식 규칙.
+    - `protectedPaths` — Flyway/Liquibase 마이그레이션 경로.
+    - `forbiddenCommands` · `commandRule` — 빌드 도구가 Gradle이 아니면 여기서 바꿔요.
+    - `importPatterns` — Kotlin 같은 다른 JVM 언어를 추가할 때만.
 
-## 2중 방어 + DDD 22원칙 커버리지
+3. `CLAUDE.md`의 `<...>` 스택/버전 플레이스홀더를 채워요.
 
-**훅(로컬, 빠름, 휴리스틱 허용) + ArchUnit(CI, 정밀, 오탐 없음)** 으로 이중 강제한다. 겹치는 구조 규칙은
-훅에선 경고, ArchUnit에선 차단 → 오탐 마찰 없이 최대 커버리지. ArchUnit 상세는 [`ARCHUNIT.md`](ARCHUNIT.md).
+끝이에요. 다음 `Edit`/`Write`부터 훅이 자동으로 돌아요. 훅이 진짜로 도는지 확인하려면 `./scripts/verify-harness.sh`를 한 번 돌려봐요. 49개 단언이 통과하면 가드레일이 깔린 거예요.
 
-| 강제 수준 | 원칙(PRD #) |
+<br>
+
+## 22 원칙 어디까지 잡아주나
+
+훅(로컬, 빠름, 휴리스틱 허용)과 ArchUnit(CI, 정밀, 오탐 없음)이 2중 방어를 구성해요. 겹치는 구조 규칙은 훅에선 경고로 두고 ArchUnit에서 차단해서, 오탐 마찰 없이 커버리지를 넓혀요.
+
+| 강제 수준 | 원칙 # |
 |---|---|
-| 🔒 훅 차단 | 도메인 순수성(#3) · DIP(#4) · 캡슐화/setter(#11·#18) · VO/이벤트 불변(#16·#20) · 필드주입 |
-| ⚠️ 훅 경고 | 애그리거트 경계(#9) · ID참조(#13) · 빈약모델(#11) · 최소애그리거트(#10) · 도메인서비스(#22) · 팩토리(#15) · BC격리(#1) · 이벤트명(#20) |
-| ✅ ArchUnit 정밀 | 레이어드/순수성(#3) · DIP(#4) · 애그리거트 접근(#9·#12) · ID참조(#13) · VO 불변(#16) |
-| 📝 강제 불가 → 스킬/리뷰 | 서브도메인 분류(#2) · 응용 로직 침투(#6·#7) · Command(#8) · 단일TX-단일AR(#14) · 보편언어 명명(#17) · Tell-Don't-Ask(#21) |
+| 🔒 훅이 차단 | 도메인 순수성(#3) · DIP(#4) · 캡슐화·setter(#11·#18) · 값 객체·이벤트 불변(#16·#20) · 필드 주입 |
+| ⚠️ 훅이 경고 | 애그리거트 경계(#9) · ID 참조(#13) · 빈약한 모델(#11) · 최소 애그리거트(#10) · 도메인 서비스(#22) · 팩토리(#15) · BC 격리(#1) · 이벤트 이름(#20) |
+| ✅ ArchUnit 정밀 | 레이어 의존·도메인 순수성(#3) · DIP(#4) · 애그리거트 접근(#9·#12) · ID 참조(#13) · 값 객체 불변(#16) |
+| 📝 자동 강제 불가 → 스킬·리뷰 | 서브도메인 분류(#2) · 응용 로직 침투(#6·#7) · Command(#8) · 단일 TX·단일 AR(#14) · 보편 언어 명명(#17) · Tell-Don't-Ask(#21) |
 
-- 실용 레이어드(기본값): 도메인 엔티티의 JPA(`@Entity`)·`@Getter`·Lombok 은 *허용*(가변 노출 @Setter/@Data만 금지).
-  순수 헥사고날은 `forbiddenImports.domain` 에 `jakarta.persistence`/`org.springframework`/`lombok` 추가(엄격 토글).
-- 📝 ~6개는 의미/런타임 분석이 필요해 정적 강제 불가 — 정직하게 `ddd-guidelines`(예방) + `ddd-reviewer`(감사)
-  + Stop 체크리스트로만 다룬다. 흉내내지 않는다(false confidence 방지).
-- 🟡 경고 규칙은 오탐 가능 → 기본 비차단. `harness.config.json` 의 `checks` 로 severity(block/warn/off) 조정.
+- **실용 레이어드**가 기본이에요. 도메인 엔티티에 JPA(`@Entity`)·`@Getter`·Lombok은 허용하고, 가변을 여는 `@Setter`·`@Data`만 막아요. 순수 헥사고날로 더 조이려면 `forbiddenImports.domain`에 `jakarta.persistence` · `org.springframework` · `lombok`을 추가하면 돼요.
+- **자동 강제 불가 6개**는 의미·런타임 분석이 필요해서 흉내내지 않아요. `ddd-guidelines`(예방) + `ddd-reviewer`(감사) + 완료 직전 체크리스트로만 다뤄요. 자동화한 척 거짓 자신감을 주지 않으려는 의도예요.
+- **경고 규칙은 정규식 휴리스틱**이라 오탐 여지가 있어요. 그래서 기본은 비차단이에요. 프로젝트가 단단해지면 `harness.config.json`의 `checks`에서 `block`/`warn`/`off`로 조정할 수 있어요.
