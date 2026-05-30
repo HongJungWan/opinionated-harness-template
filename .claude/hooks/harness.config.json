@@ -32,14 +32,24 @@
     "domain": [
       ".infra.", "infrastructure", ".adapter.", ".adapters.",
       ".application.", ".usecase.", ".controller.", ".presentation.",
-      "software.amazon.awssdk", "RestTemplate", "WebClient", "feign", "okhttp3"
+      "software.amazon.awssdk", "RestTemplate", "WebClient", "feign", "okhttp3",
+      "ApplicationEventPublisher", "EventBus", "org.springframework.context.event"
+    ],
+    "application": [
+      ".infra.", "infrastructure", ".adapter.", ".adapters.",
+      "JdbcTemplate", "software.amazon.awssdk", "RestTemplate", "WebClient", "feign", "okhttp3"
     ]
   },
   "forbiddenContentPatterns": [
     { "pattern": "@Autowired(?![^;{]*\\()", "message": "필드 주입 금지: 생성자 주입을 사용하세요 (@Autowired 필드)." },
     { "pattern": "@Setter\\b", "layers": ["domain"], "message": "도메인 캡슐화 위반: @Setter 금지(가변 노출). 의미있는 행위 메서드로 상태를 바꾸세요." },
     { "pattern": "@Data\\b", "layers": ["domain"], "message": "도메인 캡슐화 위반: @Data 금지(setter+가변 노출). @Getter/@Value 등으로 대체하세요." },
-    { "pattern": "public\\s+\\w[\\w<>\\[\\].]*\\s+set[A-Z]\\w*\\s*\\(", "layers": ["domain"], "message": "도메인 캡슐화 위반: public setter 금지(빈약 모델). 행위 메서드로 캡슐화하세요." }
+    { "pattern": "public\\s+\\w[\\w<>\\[\\].]*\\s+set[A-Z]\\w*\\s*\\(", "layers": ["domain"], "message": "도메인 캡슐화 위반: public setter 금지(빈약 모델). 행위 메서드로 캡슐화하세요." },
+    { "pattern": "@(RestController|Controller|Service|Component|Repository|Transactional)\\b", "layers": ["domain"], "message": "도메인 순수성 위반: Spring 스테레오타입/@Transactional 금지. 도메인 모델은 컨테이너에서 분리하세요." },
+    { "pattern": "\\b(LocalDateTime|Instant|LocalDate|LocalTime|ZonedDateTime|OffsetDateTime)\\s*\\.\\s*now\\s*\\(", "layers": ["domain"], "message": "시간 API 직접 호출 금지: 도메인은 Clock 또는 시간 포트를 주입받아 호출하세요." },
+    { "pattern": "\\bSystem\\s*\\.\\s*(currentTimeMillis|nanoTime)\\s*\\(", "layers": ["domain"], "message": "시스템 시계 직접 호출 금지: 도메인은 Clock 포트를 주입받으세요." },
+    { "pattern": "\\bnew\\s+(java\\.util\\.)?Random\\s*\\(", "layers": ["domain"], "message": "난수 직접 생성 금지: 도메인은 RandomProvider 포트를 주입받으세요." },
+    { "pattern": "\\bUUID\\s*\\.\\s*randomUUID\\s*\\(", "layers": ["domain"], "message": "UUID 직접 생성 금지: 도메인은 IdGenerator 포트를 주입받으세요." }
   ],
   "forbiddenFilenames": {
     "_doc": "DIP: 구현체는 infrastructure 에. 도메인엔 리포지토리 인터페이스만.",

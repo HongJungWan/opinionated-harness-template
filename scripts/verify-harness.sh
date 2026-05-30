@@ -26,6 +26,7 @@ expect_msg() {
 }
 
 DOM="$ROOT/fixtures/bad/src/main/java/com/example/domain"
+APP="$ROOT/fixtures/bad/src/main/java/com/example/application"
 BAD="$DOM/order/OrderService.java"
 CART="$DOM/order/Cart.java"
 IMPL="$DOM/order/OrderRepositoryImpl.java"
@@ -33,6 +34,11 @@ MONEY="$DOM/order/Money.java"
 REPO="$DOM/order/OrderRepository.java"
 CHECKOUT="$DOM/checkout/Checkout.java"
 SUBS="$DOM/subscription/Subscription.java"
+ANNOT="$DOM/order/AnnotatedOrder.java"
+JDBC="$APP/JdbcOrderService.java"
+EVENTPUB="$DOM/event/OrderShipped.java"
+TIMEBOMB="$DOM/order/TimeBomb.java"
+RANDOMID="$DOM/order/RandomId.java"
 CLEAN="$ROOT/fixtures/clean/src/main/java/com/example/domain/order/Order.java"
 mk() { echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$1\"}}"; }
 
@@ -43,6 +49,13 @@ expect 2 "도메인 *RepositoryImpl(DIP) → 차단"    guard "$(mk "$IMPL")"
 expect 2 "@ValueObject 가변(불변성) → 차단"       guard "$(mk "$MONEY")"
 expect 2 "도메인 *Repository 클래스(DIP) → 차단"  guard "$(mk "$REPO")"
 expect 0 "리치 도메인 엔티티 → 통과(경고 없음)"   guard "$(mk "$CLEAN")"
+
+echo "▶ guard — 신규 차단 룰(A·B·C·I·J)"
+expect 2 "도메인 Spring 스테레오타입/@Transactional → 차단" guard "$(mk "$ANNOT")"
+expect 2 "응용→인프라 import(JdbcTemplate) → 차단"          guard "$(mk "$JDBC")"
+expect 2 "도메인 EventPublisher import → 차단"              guard "$(mk "$EVENTPUB")"
+expect 2 "도메인 LocalDateTime.now() 직접 호출 → 차단"       guard "$(mk "$TIMEBOMB")"
+expect 2 "도메인 UUID.randomUUID() 직접 호출 → 차단"         guard "$(mk "$RANDOMID")"
 
 echo "▶ guard — 메시지 + exit 코드 (현 정책: checks.aggregateBoundary/idReference=block)"
 expect_msg 2 "애그리거트 경계" "다른 애그리거트 @AggregateInternal 참조 → 차단" "$CHECKOUT"
