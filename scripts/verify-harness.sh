@@ -79,6 +79,18 @@ echo "▶ config 유효성"
 if node -e "JSON.parse(require('fs').readFileSync('$ROOT/.claude/hooks/harness.config.json','utf8'))" 2>/dev/null; then
   echo "  ✔ harness.config.json 파싱 OK"; pass=$((pass+1)); else echo "  ✗ config 파싱 실패"; fail=$((fail+1)); fi
 
+echo "▶ 슬래시 커맨드 (.claude/commands/)"
+for cmd in ddd-review verify ddd-fix; do
+  f="$ROOT/.claude/commands/$cmd.md"
+  if [ -f "$f" ] && head -n 1 "$f" | grep -q '^---' && grep -q '^description:' "$f"; then
+    echo "  ✔ /$cmd 존재 + frontmatter(description) OK"; pass=$((pass+1));
+  else echo "  ✗ /$cmd 누락 또는 frontmatter 불량"; fail=$((fail+1)); fi
+done
+
+echo "▶ MCP 템플릿 (.mcp.json)"
+if node -e "const m=JSON.parse(require('fs').readFileSync('$ROOT/.mcp.json','utf8')); if(!m.mcpServers||!Object.keys(m.mcpServers).length)process.exit(1)" 2>/dev/null; then
+  echo "  ✔ .mcp.json 파싱 OK + mcpServers 존재"; pass=$((pass+1)); else echo "  ✗ .mcp.json 파싱 실패 또는 mcpServers 없음"; fail=$((fail+1)); fi
+
 echo
 echo "결과: $pass 통과 / $fail 실패"
 [ "$fail" -eq 0 ] && echo "✅ 하네스 훅 검증 완료" || { echo "❌ 실패 있음"; exit 1; }
