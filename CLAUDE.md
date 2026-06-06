@@ -26,7 +26,10 @@
 - 로컬 실행: `./gradlew bootRun`
 
 ## 5. 하네스 레버 (이 저장소 구성)
-- **Skills**(`.claude/skills/`): 필요 시 로드 — `ddd-guidelines` · `db-migration`(Flyway) · `api-generator`(REST) · `jpa-persistence`.
-- **Subagents**(`.claude/agents/ddd-reviewer.md`): 전체 DDD 감사 등 헤비 태스크는 위임 후 결론만 회수.
-- **Hooks**(`.claude/hooks/`): 작성 코드를 자동 검증(§3). 규칙 수정은 `harness.config.json` 한 곳.
+레버는 **컨텍스트 축**(모델이 무엇을 보는가)과 **하네스 축**(무엇을 할 수 있고 무엇이 검증하는가)으로 나뉜다. 경계는 `docs/HARNESS.md` 참조.
+- **Skills**(`.claude/skills/`, 컨텍스트): 필요 시 로드 — `ddd-guidelines` · `db-migration`(Flyway) · `api-generator`(REST) · `jpa-persistence`.
+- **Subagents**(`.claude/agents/ddd-reviewer.md`, 컨텍스트): 전체 DDD 감사 등 헤비 태스크는 위임 후 결론만 회수.
+- **Commands**(`.claude/commands/`, 워크플로): `/ddd-review`(변경분 감사) · `/verify`(훅+테스트+ArchUnit 실행) · `/ddd-fix`(위반 점진 수정).
+- **Hooks**(`.claude/hooks/`, 하네스): 작성 코드를 자동 검증(§3). 규칙 수정은 `harness.config.json` 한 곳.
+- **MCP**(`.mcp.json`, 하네스·opt-in): 외부 도구·데이터 접근(예: Postgres 스키마). 안 쓰면 복사 안 하면 됨.
 - **완료 직전 자가 점검**(Stop 훅): 요구사항 대조·실행 검증·DDD 준수를 1회 점검한 뒤 종료한다.
