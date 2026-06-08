@@ -155,7 +155,8 @@ flowchart TD
 **`새 기능`  ArchUnit CI 게이트**
 
 CI에서 컴파일된 클래스 그래프 전체를 보고 구조 위반을 막아요. 레이어 의존성, DIP, 애그리거트 접근,
-ID 참조, 값 객체 불변성을 검사해요. 여러 클래스에 걸친 구조 문제나 훅을 거치지 않은 변경은 여기서 걸려요.
+ID 참조, 값 객체 불변성에 더해, 도메인 `@Entity` 표시·애그리거트 루트 팩토리·서브도메인 의존 방향(CORE→GENERIC)·
+application 입력 명명까지 총 10가지 규칙을 검사해요. 여러 클래스에 걸친 구조 문제나 훅을 거치지 않은 변경은 여기서 걸려요.
 
 규칙이 진짜로 위반을 잡는지까지 `DddRulesNegativeTest`로 역검증해 둬서, 게이트 자체를 믿고 쓸 수 있어요.
 
@@ -174,8 +175,9 @@ flowchart TD
 
 **`새 기능`  공용 마커 어노테이션**
 
-`@AggregateRoot` · `@AggregateInternal` · `@ValueObject` · `@DomainEvent` · `@DomainService` 를 제공해요.
-도메인 모델에 이 마커를 붙이면 훅과 ArchUnit이 같은 기준으로 애그리거트·값 객체·이벤트 규칙을 검사해요.
+`@AggregateRoot` · `@AggregateInternal` · `@ValueObject` · `@DomainEvent` · `@DomainService` · `@Subdomain` 6가지를 제공해요.
+도메인 모델에 이 마커를 붙이면 훅과 ArchUnit이 같은 기준으로 애그리거트·값 객체·이벤트·서브도메인 규칙을 검사해요.
+`@Subdomain(CORE|SUPPORTING|GENERIC)`은 전략적 설계(서브도메인 분류)를 표시하고, CORE→GENERIC 의존을 ArchUnit이 막아요.
 
 ```java
 // 주문(Order) = 하나의 애그리거트. 바깥에서는 항상 Order를 거쳐서만 다룬다.

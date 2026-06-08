@@ -24,4 +24,24 @@ class DddRulesNegativeTest {
     void idReference_catchesDirectAggregateRootReference() {
         assertTrue(DddRules.ID_REFERENCE_BETWEEN_AGGREGATES.evaluate(bad).hasViolation(), "AR 직접 참조를 잡아야 함");
     }
+
+    @Test
+    void aggregateRootHasFactory_catchesMissingFactory() {
+        assertTrue(DddRules.AGGREGATE_ROOT_HAS_FACTORY.evaluate(bad).hasViolation(), "팩토리 없는 AR 을 잡아야 함");
+    }
+
+    @Test
+    void coreNotDependOnGeneric_catchesCoreToGenericDependency() {
+        assertTrue(DddRules.CORE_NOT_DEPEND_ON_GENERIC.evaluate(bad).hasViolation(), "CORE→GENERIC 의존을 잡아야 함");
+    }
+
+    @Test
+    void requestInputIsCommand_catchesRequestNamedInput() {
+        assertTrue(DddRules.REQUEST_INPUT_IS_COMMAND.evaluate(bad).hasViolation(), "application 의 *Request 명명을 잡아야 함");
+    }
+
+    @Test
+    void domainEntityMarked_catchesUnmarkedEntity() {
+        assertTrue(DddRules.DOMAIN_ENTITY_MARKED.evaluate(bad).hasViolation(), "표시 없는 도메인 @Entity 를 잡아야 함");
+    }
 }
