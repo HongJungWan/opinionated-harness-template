@@ -4,7 +4,7 @@
 
 <br>
 
-## ArchUnit이 잡는 규칙 6가지
+## ArchUnit이 잡는 규칙 10가지
 
 규칙 정의는 `archunit/src/test/java/com/example/archunit/DddRules.java` 한 파일에 모여 있어요.
 
@@ -16,8 +16,12 @@
 | `DDD_ID_REFERENCE` | 애그리거트 루트 필드가 다른 애그리거트 루트를 객체로 직접 참조하면 차단 (ID로 바꾸라는 신호) | #13 |
 | `DDD_VO_IMMUTABLE` | `@ValueObject`의 필드가 `final`이 아니면 차단 | #16 |
 | `DDD_NO_FIELD_INJECTION` | 필드 주입(`@Autowired` 필드)을 발견하면 차단 | — |
+| `DDD_DOMAIN_ENTITY_MARKED` | 도메인 `@Entity`가 `@AggregateRoot`/`@AggregateInternal`로 표시되지 않으면 차단 (jakarta 비의존: 문자열 매칭) | — |
+| `DDD_AGGREGATE_ROOT_HAS_FACTORY` | `@AggregateRoot`에 자기 타입을 반환하는 `public static` 팩토리가 없으면 차단 | — |
+| `DDD_CORE_NOT_DEPEND_ON_GENERIC` | `@Subdomain(CORE)` 클래스가 `@Subdomain(GENERIC)` 클래스에 의존하면 차단 (전략적 의존 방향) | — |
+| `DDD_REQUEST_INPUT_IS_COMMAND` | `..application..`의 입력이 `*Request`로 명명되면 차단 (Command 명명 권장) | — |
 
-마커 어노테이션은 `ddd-markers/`에 있어요. 훅과 ArchUnit이 같은 마커를 봐서, 도메인 모델 한 곳에 표시해두면 양쪽이 함께 인식해요.
+마커 어노테이션은 `ddd-markers/`에 있어요(`@AggregateRoot`·`@AggregateInternal`·`@ValueObject`·`@DomainService`·`@DomainEvent`·`@Subdomain`). 훅과 ArchUnit이 같은 마커를 봐서, 도메인 모델 한 곳에 표시해두면 양쪽이 함께 인식해요. `@Subdomain(CORE|SUPPORTING|GENERIC)`는 전략적 설계(서브도메인 분류)를 표시하며, `CORE→GENERIC` 의존을 ArchUnit이 막아요.
 
 <br>
 
@@ -29,7 +33,7 @@ cd archunit && ./gradlew test
 
 두 테스트가 함께 돌아요.
 
-- `DddArchitectureTest`는 깨끗한 헥사고날 샘플(`src/main`)에 6가지 규칙을 적용해 GREEN인지 확인해요.
+- `DddArchitectureTest`는 깨끗한 헥사고날 샘플(`src/main`)에 10가지 규칙을 적용해 GREEN인지 확인해요.
 - `DddRulesNegativeTest`는 의도적으로 규칙을 위반한 샘플(`src/test/.../baddomain`)을 룰이 정말 잡아내는지 역검증해요. 게이트 자체가 멍하게 통과하지 않는다는 걸 보장하는 장치예요.
 
 <br>

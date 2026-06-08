@@ -10,6 +10,7 @@ sourceSets { main { java { srcDir("../ddd-markers") } } }
 
 dependencies {
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
+    testImplementation("jakarta.persistence:jakarta.persistence-api:3.1.0")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.3")
 }
