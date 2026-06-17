@@ -11,6 +11,8 @@ sourceSets { main { java { srcDir("../ddd-markers") } } }
 dependencies {
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
     testImplementation("jakarta.persistence:jakarta.persistence-api:3.1.0")
+    // 스프링 스테레오타입 위반 픽스처(@Service 등)가 컴파일되도록 — 규칙 자체는 문자열 매칭이라 스프링 비의존.
+    testImplementation("org.springframework:spring-context:6.2.1")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.3")
 }
