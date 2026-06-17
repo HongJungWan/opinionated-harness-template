@@ -2,16 +2,23 @@ package com.example.archunit;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMembers;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 
 import com.example.shared.ddd.AggregateInternal;
 import com.example.shared.ddd.AggregateRoot;
+import com.example.shared.ddd.DomainService;
 import com.example.shared.ddd.Subdomain;
 import com.example.shared.ddd.SubdomainType;
 import com.example.shared.ddd.ValueObject;
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.core.domain.JavaField;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
@@ -88,6 +95,70 @@ public final class DddRules {
             .as("[DDD_REQUEST_INPUT_IS_COMMAND] application 입력은 Command 로 명명(Request 금지)")
             .allowEmptyShould(false);
 
+    /** 도메인에 스프링 스테레오타입/@Transactional 금지(POJO 유지). 문자열 매칭(스프링 비의존). */
+    public static final ArchRule NO_SPRING_STEREOTYPES_IN_DOMAIN = noClasses().that()
+            .resideInAPackage("..domain..")
+            .should().beAnnotatedWith("org.springframework.stereotype.Service")
+            .orShould().beAnnotatedWith("org.springframework.stereotype.Component")
+            .orShould().beAnnotatedWith("org.springframework.stereotype.Repository")
+            .orShould().beAnnotatedWith("org.springframework.stereotype.Controller")
+            .orShould().beAnnotatedWith("org.springframework.web.bind.annotation.RestController")
+            .orShould().beAnnotatedWith("org.springframework.transaction.annotation.Transactional")
+            .as("[DDD_NO_SPRING_IN_DOMAIN] 도메인에 스프링 스테레오타입/@Transactional 금지")
+            .allowEmptyShould(true);
+
+    /** 도메인 public setter 금지(빈약 모델 방지). Lombok 의 setter 생성 애너테이션이 만든 setter 도 바이트코드로 포착. */
+    public static final ArchRule DOMAIN_NO_PUBLIC_SETTER = noMethods().that()
+            .areDeclaredInClassesThat().resideInAPackage("..domain..")
+            .should().bePublic().andShould().haveNameMatching("set[A-Z].*")
+            .as("[DDD_NO_PUBLIC_SETTER] 도메인은 public setter 금지(행위 메서드로 캡슐화)")
+            .allowEmptyShould(true);
+
+    /** 도메인 내부 비결정적 API(시간/난수) 직접 호출 금지 — 호출자(application)가 주입. */
+    public static final ArchRule DOMAIN_NO_NONDETERMINISTIC_API = classes().that()
+            .resideInAPackage("..domain..")
+            .should(notCallNonDeterministicApi())
+            .as("[DDD_NO_NONDETERMINISTIC_API] 도메인에서 시간/난수 API 직접 호출 금지")
+            .allowEmptyShould(true);
+
+    /** 도메인 서비스 무상태: @DomainService 의 필드는 final. */
+    public static final ArchRule DOMAIN_SERVICE_STATELESS = fields().that()
+            .areDeclaredInClassesThat().areAnnotatedWith(DomainService.class)
+            .should().beFinal()
+            .as("[DDD_DOMAIN_SERVICE_STATELESS] 도메인 서비스는 무상태(필드 final)")
+            .allowEmptyShould(true);
+
+    /**
+     * 다른 애그리거트/비즈니스 식별자 참조 필드(`customerId` 등 `*Id`)는 전용 타입(Typed ID) 사용 — raw String/Long/UUID 금지.
+     * 자체 surrogate 키(`id` 또는 JPA `@Id`/`@EmbeddedId`)는 실용 레이어드(JPA) 허용을 위해 면제.
+     */
+    public static final ArchRule AGGREGATE_ID_FIELD_IS_TYPED = fields().that()
+            .areDeclaredInClassesThat(annotatedAsAggregate())
+            .should(haveTypedIdType())
+            .as("[DDD_TYPED_ID] 애그리거트 간 참조 식별자는 전용 타입(Typed ID) 사용(자체 @Id surrogate는 면제)")
+            .allowEmptyShould(true);
+
+    /** 도메인 멤버(필드/생성자/메서드) 전반에 @Autowired 금지 — 필드주입 외 생성자/메서드 주입까지 차단. */
+    public static final ArchRule NO_AUTOWIRED_IN_DOMAIN = noMembers().that()
+            .areDeclaredInClassesThat().resideInAPackage("..domain..")
+            .should().beAnnotatedWith("org.springframework.beans.factory.annotation.Autowired")
+            .as("[DDD_NO_AUTOWIRED_IN_DOMAIN] 도메인은 @Autowired 금지(생성자 주입은 프레임워크 비의존으로)")
+            .allowEmptyShould(true);
+
+    /** 애그리거트 루트의 public 메서드가 내부 컬렉션을 날것으로 노출(List/Set/Map 반환) 금지. */
+    public static final ArchRule AGGREGATE_NO_EXPOSED_MUTABLE_COLLECTION = methods().that()
+            .areDeclaredInClassesThat().areAnnotatedWith(AggregateRoot.class).and().arePublic().and().areNotStatic()
+            .should(notReturnRawCollection())
+            .as("[DDD_NO_EXPOSED_COLLECTION] AR 은 내부 컬렉션을 날것으로 노출하지 않는다(불변 뷰/복사/스트림)")
+            .allowEmptyShould(true);
+
+    /** application 의 *Command 는 불변(record 또는 setter 없음 + 모든 인스턴스 필드 final). */
+    public static final ArchRule COMMAND_IS_IMMUTABLE = classes().that()
+            .resideInAPackage("..application..").and().haveSimpleNameEndingWith("Command")
+            .should(beImmutableCommand())
+            .as("[DDD_COMMAND_IMMUTABLE] Command 는 불변(record 또는 setter 없음·필드 final)")
+            .allowEmptyShould(true);
+
     private static ArchCondition<JavaClass> onlyBeAccessedWithinSameAggregate() {
         return new ArchCondition<>("only be accessed within the same aggregate (package)") {
             @Override
@@ -157,6 +228,112 @@ public final class DddRules {
                     events.add(SimpleConditionEvent.violated(field,
                             field.getFullName() + " directly references aggregate root "
                                     + type.getSimpleName() + " (use its ID instead)"));
+                }
+            }
+        };
+    }
+
+    private static final java.util.Set<String> NONDETERMINISTIC_TIME_TYPES = java.util.Set.of(
+            "java.time.LocalDateTime", "java.time.Instant", "java.time.LocalDate",
+            "java.time.LocalTime", "java.time.ZonedDateTime", "java.time.OffsetDateTime");
+
+    private static ArchCondition<JavaClass> notCallNonDeterministicApi() {
+        return new ArchCondition<>("not call non-deterministic time/random APIs") {
+            @Override
+            public void check(JavaClass clazz, ConditionEvents events) {
+                for (JavaMethodCall call : clazz.getMethodCallsFromSelf()) {
+                    String owner = call.getTargetOwner().getFullName();
+                    String name = call.getName();
+                    boolean bad = (NONDETERMINISTIC_TIME_TYPES.contains(owner) && name.equals("now"))
+                            || (owner.equals("java.util.UUID") && name.equals("randomUUID"))
+                            || (owner.equals("java.lang.Math") && name.equals("random"))
+                            || (owner.equals("java.util.concurrent.ThreadLocalRandom") && name.equals("current"))
+                            || (owner.equals("java.lang.System")
+                                    && (name.equals("currentTimeMillis") || name.equals("nanoTime")));
+                    if (bad) {
+                        events.add(SimpleConditionEvent.violated(call,
+                                call.getDescription() + " (inject time/id from the caller instead)"));
+                    }
+                }
+                for (JavaConstructorCall call : clazz.getConstructorCallsFromSelf()) {
+                    String owner = call.getTargetOwner().getFullName();
+                    if (owner.equals("java.util.Random") || owner.equals("java.security.SecureRandom")) {
+                        events.add(SimpleConditionEvent.violated(call,
+                                call.getDescription() + " (inject randomness from the caller instead)"));
+                    }
+                }
+            }
+        };
+    }
+
+    private static com.tngtech.archunit.base.DescribedPredicate<JavaClass> annotatedAsAggregate() {
+        return new com.tngtech.archunit.base.DescribedPredicate<>(
+                "annotated with @AggregateRoot or @AggregateInternal") {
+            @Override
+            public boolean test(JavaClass c) {
+                return c.isAnnotatedWith(AggregateRoot.class) || c.isAnnotatedWith(AggregateInternal.class);
+            }
+        };
+    }
+
+    private static final java.util.Set<String> RAW_ID_TYPES = java.util.Set.of(
+            "java.lang.String", "long", "java.lang.Long", "int", "java.lang.Integer", "java.util.UUID");
+
+    private static ArchCondition<JavaField> haveTypedIdType() {
+        return new ArchCondition<>("use a dedicated typed-ID type for cross-aggregate identifier fields") {
+            @Override
+            public void check(JavaField field, ConditionEvents events) {
+                String n = field.getName();
+                // 자체 surrogate 키(이름 'id' 또는 JPA @Id/@EmbeddedId)는 면제 — 실용 레이어드 JPA 허용.
+                boolean ownSurrogate = n.equals("id")
+                        || field.isAnnotatedWith("jakarta.persistence.Id")
+                        || field.isAnnotatedWith("jakarta.persistence.EmbeddedId");
+                // 다른 애그리거트/비즈니스 식별자 참조(customerId 등)는 전용 타입 권장.
+                boolean foreignIdentifier = n.endsWith("Id") && !n.equals("id");
+                if (!ownSurrogate && foreignIdentifier
+                        && RAW_ID_TYPES.contains(field.getRawType().getFullName())) {
+                    events.add(SimpleConditionEvent.violated(field,
+                            field.getFullName() + " uses raw type " + field.getRawType().getSimpleName()
+                                    + " for an aggregate reference (use a typed ID value object)"));
+                }
+            }
+        };
+    }
+
+    private static final java.util.Set<String> RAW_COLLECTION_TYPES = java.util.Set.of(
+            "java.util.List", "java.util.Set", "java.util.Map", "java.util.Collection",
+            "java.util.SortedSet", "java.util.SortedMap");
+
+    private static ArchCondition<JavaMethod> notReturnRawCollection() {
+        return new ArchCondition<>("not return a raw mutable collection type") {
+            @Override
+            public void check(JavaMethod method, ConditionEvents events) {
+                if (RAW_COLLECTION_TYPES.contains(method.getRawReturnType().getFullName())) {
+                    events.add(SimpleConditionEvent.violated(method,
+                            method.getFullName() + " returns raw " + method.getRawReturnType().getSimpleName()
+                                    + " (return an unmodifiable view, defensive copy, or stream)"));
+                }
+            }
+        };
+    }
+
+    private static ArchCondition<JavaClass> beImmutableCommand() {
+        return new ArchCondition<>("be immutable (record, or no public setter and all instance fields final)") {
+            @Override
+            public void check(JavaClass clazz, ConditionEvents events) {
+                if (clazz.isRecord()) return;
+                for (JavaMethod m : clazz.getMethods()) {
+                    if (m.getModifiers().contains(JavaModifier.PUBLIC) && m.getName().matches("set[A-Z].*")) {
+                        events.add(SimpleConditionEvent.violated(clazz,
+                                clazz.getName() + " has public setter " + m.getName() + " (Command must be immutable)"));
+                    }
+                }
+                for (JavaField f : clazz.getFields()) {
+                    if (!f.getModifiers().contains(JavaModifier.STATIC)
+                            && !f.getModifiers().contains(JavaModifier.FINAL)) {
+                        events.add(SimpleConditionEvent.violated(clazz,
+                                clazz.getName() + " has non-final field " + f.getName() + " (Command must be immutable)"));
+                    }
                 }
             }
         };
