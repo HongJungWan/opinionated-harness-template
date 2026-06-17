@@ -44,7 +44,7 @@ cd archunit && ./gradlew test
 두 테스트가 함께 돌아요.
 
 - `DddArchitectureTest`는 깨끗한 헥사고날 샘플(`src/main`)에 18가지 규칙을 적용해 GREEN인지 확인해요.
-- `DddRulesNegativeTest`는 의도적으로 규칙을 위반한 샘플(`src/test/.../baddomain`)을 룰이 정말 잡아내는지 역검증해요. 게이트 자체가 멍하게 통과하지 않는다는 걸 보장하는 장치예요.
+- `DddRulesNegativeTest`는 의도적으로 규칙을 위반한 샘플(`src/test/.../baddomain`)을 룰이 정말 잡아내는지 역검증하고, 면제돼야 할 패턴(`goodjpa` — JPA surrogate ID는 Typed ID 규칙에서 제외)은 오탐 없이 통과하는지도 확인해요. 게이트 자체가 멍하게 통과하지 않는다는 걸 보장하는 장치예요.
 
 > 참고: 훅은 `fixtures/bad/**`로 자가검증하고(로컬·휴리스틱·빠름), ArchUnit은 `archunit/src/test/.../baddomain/**`로 역검증해요(CI·정밀·오탐 0). 픽스처 트리가 둘로 나뉜 건 두 게이트의 검증 수준이 달라서예요.
 
